@@ -4,11 +4,12 @@ from rest_framework import serializers
 from rest_framework_bulk.serializers import BulkListSerializer
 
 from common.mixins import BulkSerializerMixin
-from ..models import Asset, Node
+from ..models import Asset
 from .system_user import AssetSystemUserSerializer
 
 __all__ = [
     'AssetSerializer', 'AssetGrantedSerializer', 'MyAssetGrantedSerializer',
+    'AssetAsNodeSerializer', 'AssetSimpleSerializer',
 ]
 
 
@@ -22,12 +23,25 @@ class AssetSerializer(BulkSerializerMixin, serializers.ModelSerializer):
         fields = '__all__'
         validators = []
 
+    @classmethod
+    def setup_eager_loading(cls, queryset):
+        """ Perform necessary eager loading of data. """
+        queryset = queryset.prefetch_related('labels', 'nodes')\
+            .select_related('admin_user')
+        return queryset
+
     def get_field_names(self, declared_fields, info):
         fields = super().get_field_names(declared_fields, info)
         fields.extend([
-            'hardware_info', 'is_connective', 'org_name'
+            'hardware_info', 'connectivity', 'org_name'
         ])
         return fields
+
+
+class AssetAsNodeSerializer(serializers.ModelSerializer):
+    class Meta:
+        model = Asset
+        fields = ['id', 'hostname', 'ip', 'port', 'platform', 'protocol']
 
 
 class AssetGrantedSerializer(serializers.ModelSerializer):
@@ -64,3 +78,9 @@ class MyAssetGrantedSerializer(AssetGrantedSerializer):
             "is_active", "system_users_join", "org_name",
             "os", "platform", "comment", "org_id", "protocol"
         )
+
+
+class AssetSimpleSerializer(serializers.ModelSerializer):
+    class Meta:
+        model = Asset
+        fields = ['id', 'hostname', 'port', 'ip', 'connectivity']

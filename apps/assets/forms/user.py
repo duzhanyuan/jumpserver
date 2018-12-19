@@ -3,8 +3,9 @@
 from django import forms
 from django.utils.translation import gettext_lazy as _
 
-from ..models import AdminUser, SystemUser
 from common.utils import validate_ssh_private_key, ssh_pubkey_gen, get_logger
+from orgs.mixins import OrgModelForm
+from ..models import AdminUser, SystemUser
 
 logger = get_logger(__file__)
 __all__ = [
@@ -85,7 +86,7 @@ class AdminUserForm(PasswordAndKeyAuthForm):
         }
 
 
-class SystemUserForm(PasswordAndKeyAuthForm):
+class SystemUserForm(OrgModelForm, PasswordAndKeyAuthForm):
     # Admin user assets define, let user select, save it in form not in view
     auto_generate_key = forms.BooleanField(initial=True, required=False)
 
@@ -98,8 +99,8 @@ class SystemUserForm(PasswordAndKeyAuthForm):
         auto_generate_key = self.cleaned_data.get('auto_generate_key', False)
         private_key, public_key = super().gen_keys()
 
-        if login_mode == SystemUser.MANUAL_LOGIN or \
-                protocol in [SystemUser.RDP_PROTOCOL, SystemUser.TELNET_PROTOCOL]:
+        if login_mode == SystemUser.LOGIN_MANUAL or \
+                protocol in [SystemUser.PROTOCOL_RDP, SystemUser.PROTOCOL_TELNET]:
             system_user.auto_push = 0
             auto_generate_key = False
             system_user.save()
@@ -123,7 +124,7 @@ class SystemUserForm(PasswordAndKeyAuthForm):
         validated = super().is_valid()
         username = self.cleaned_data.get('username')
         login_mode = self.cleaned_data.get('login_mode')
-        if login_mode == SystemUser.AUTO_LOGIN and not username:
+        if login_mode == SystemUser.LOGIN_AUTO and not username:
             self.add_error(
                 "username", _('* Automatic login mode,'
                               ' must fill in the username.')
@@ -136,17 +137,20 @@ class SystemUserForm(PasswordAndKeyAuthForm):
         fields = [
             'name', 'username', 'protocol', 'auto_generate_key',
             'password', 'private_key_file', 'auto_push', 'sudo',
-            'comment', 'shell', 'priority', 'login_mode',
+            'comment', 'shell', 'priority', 'login_mode', 'cmd_filters',
         ]
         widgets = {
             'name': forms.TextInput(attrs={'placeholder': _('Name')}),
             'username': forms.TextInput(attrs={'placeholder': _('Username')}),
+            'cmd_filters': forms.SelectMultiple(attrs={
+                'class': 'select2', 'data-placeholder': _('Command filter')
+            }),
         }
         help_texts = {
             'name': '* required',
             'username': '* required',
             'auto_push': _('Auto push system user to asset'),
-            'priority': _('High level will be using login asset as default, '
+            'priority': _('1-100, High level will be using login asset as default, '
                           'if user was granted more than 2 system user'),
             'login_mode': _('If you choose manual login mode, you do not '
                             'need to fill in the username and password.')
